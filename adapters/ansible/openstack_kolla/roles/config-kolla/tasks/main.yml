@@ -1,0 +1,193 @@
+# #############################################################################
+# Copyright (c) 2017 HUAWEI TECHNOLOGIES CO.,LTD and others.
+#
+# All rights reserved. This program and the accompanying materials
+# are made available under the terms of the Apache License, Version 2.0
+# which accompanies this distribution, and is available at
+# http://www.apache.org/licenses/LICENSE-2.0
+# #############################################################################
+---
+- name: remove kolla log directory if exist
+  file:
+    path: /var/log/kolla/
+    state: absent
+
+- name: remove ceph ansible directory if exist
+  file:
+    path: /etc/ansible/roles/ceph-ansible/
+    state: absent
+
+- name: create kolla log directory
+  file:
+    path: /var/log/kolla/
+    state: directory
+
+- name: clone ceph ansible
+  shell: "git clone https://github.com/ceph/ceph-ansible /etc/ansible/roles/ceph-ansible"
+
+- name: copy file
+  copy:
+    src: site.yml
+    dest: /etc/ansible/roles/ceph-ansible/
+
+- name: copy file
+  copy:
+    src: all.yml
+    dest: /etc/ansible/roles/ceph-ansible/group_vars/
+
+- name: copy file
+  copy:
+    src: ceph_host
+    dest: /etc/ansible/hosts
+
+- name: deploy ceph
+  #command: "pwd"
+  shell: "cd /etc/ansible/roles/ceph-ansible/; \
+                 /usr/bin/ansible-playbook site.yml \
+                 | tee /var/log/kolla/ceph.log"
+
+- name: rander kolla globals config
+  template:
+    src: globals.yml.j2
+    dest: /etc/kolla/globals.yml
+
+- name: create kolla kolla-ansible directory
+  file:
+    path: /opt/kolla-ansible
+    state: directory
+
+- name: rander inventory
+  template:
+    src: multinode.j2
+    dest: /opt/kolla-ansible/multinode
+
+- name: check docker repo
+  shell: "ping -c 2 {{ LOCAL_DOCKER_REPOSITORY_IP }} > /dev/null"
+  register: checkresult
+  ignore_errors: "true"
+
+- name: add docker repo
+  lineinfile:
+    dest: /etc/kolla/globals.yml
+    regexp: "#docker_registry:"
+    line: "docker_registry: {{ LOCAL_DOCKER_REPOSITORY_IP }}"
+  when: checkresult.rc == 0
+
+- name: create directory
+  file:
+    dest: /etc/kolla/config/glance/
+    state: directory
+
+- name: config glace ceph
+  copy:
+    src: glance-api.conf
+    dest: /etc/kolla/config/glance/glance-api.conf 
+
+- name: config glace ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest: /etc/kolla/config/glance/ceph.conf
+
+- name: config glace ceph
+  copy:
+    src: /tmp/kolla/ceph.client.glance.keyring
+    dest: /etc/kolla/config/glance/ceph.client.glance.keyring
+
+- name: create directory
+  file:
+    dest: /etc/kolla/config/cinder/
+    state: directory
+
+- name: config glace ceph
+  copy:
+    src: cinder-volume.conf
+    dest: /etc/kolla/config/cinder/cinder-volume.conf
+
+- name: config glace ceph
+  copy:
+    src: cinder-backup.conf
+    dest: /etc/kolla/config/cinder/cinder-backup.conf
+
+- name: config glace ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest: /etc/kolla/config/cinder/ceph.conf
+
+- name: create directory
+  file:
+    dest: /etc/kolla/config/cinder/cinder-backup
+    state: directory
+
+- name: create directory
+  file:
+    dest: /etc/kolla/config/cinder/cinder-volume
+    state: directory
+
+- name: config cinder ceph
+  copy:
+    src: /tmp/kolla/ceph.client.cinder.keyring
+    dest: /etc/kolla/config/cinder/cinder-backup/ceph.client.cinder.keyring
+
+
+- name: config cinder ceph
+  copy:
+    src: /tmp/kolla/ceph.client.cinder-backup.keyring
+    dest: /etc/kolla/config/cinder/cinder-backup/ceph.client.cinder-backup.keyring
+
+- name: config cinder ceph
+  copy:
+    src: /tmp/kolla/ceph.client.cinder.keyring
+    dest: /etc/kolla/config/cinder/cinder-volume/ceph.client.cinder.keyring
+
+- name: create directory
+  file:
+    dest: /etc/kolla/config/nova/
+    state: directory
+
+- name: config nova ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest:  /etc/kolla/config/nova/ceph.conf
+
+- name: config nova ceph
+  copy:
+    src: /tmp/kolla/ceph.client.cinder.keyring
+    dest: /etc/kolla/config/nova/ceph.client.cinder.keyring
+
+- name: config nova ceph
+  copy:
+    src: /tmp/kolla/ceph.client.nova.keyring
+    dest: /etc/kolla/config/nova/ceph.client.nova.keyring
+
+- name: config nova ceph
+  copy:
+    src: nova-compute.conf
+    dest: /etc/kolla/config/nova/nova-compute.conf
+
+- name: create directory
+  file: 
+    dest: /etc/kolla/config/gnocchi/
+    state: directory
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest: /etc/kolla/config/gnocchi/ceph.conf
+
+- name: config gnocchi ceph
+  copy:
+    src: gnocchi.conf
+    dest: /etc/kolla/config/gnocchi/gnocchi.conf
+
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.client.gnocchi.keyring
+    dest: /etc/kolla/config/gnocchi/ceph.client.gnocchi.keyring
+
+- name: add code into openvswitch to restart network
+  blockinfile:
+    dest: /usr/share/kolla-ansible/ansible/roles/openvswitch/tasks/main.yml
+    block: |
+     - name: restart network
+       shell: "ifconfig eth1 0 && ifdown -a && ifup -a"

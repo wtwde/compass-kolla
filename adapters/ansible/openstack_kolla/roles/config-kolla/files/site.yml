@@ -1,0 +1,72 @@
+---
+# Defines deployment design and assigns role to server groups
+
+- hosts:
+  - mons
+  - osds
+  gather_facts: false
+  tags:
+    - always
+
+  vars:
+    delegate_facts_host: True
+
+  tasks:
+    # If we can't get python2 installed before any module is used we will fail
+    # so just try what we can to get it installed
+
+    - name: gather facts
+      setup:
+      when:
+        - not delegate_facts_host | bool
+
+    - name: gather and delegate facts
+      setup:
+      delegate_to: "{{ item }}"
+      delegate_facts: True
+      with_items: "{{ groups['all'] }}"
+      when:
+        - delegate_facts_host | bool
+
+- hosts: mons
+  gather_facts: false
+  become: True
+  roles:
+    - { role: ceph-defaults, tags: ['ceph_update_config'] }
+    - ceph-common
+    - { role: ceph-config, tags: ['ceph_update_config'] }
+    - ceph-mon
+  post_tasks:
+    - name: find ceph keys
+      shell: cd /etc/ceph; ls -1 *.keyring *.conf
+      changed_when: false
+      register: ceph_keys
+      check_mode: no
+    
+    - name: copy keys to the ansible server
+      fetch:
+        src: "/etc/ceph/{{ item }}"
+        dest: "/tmp/kolla"
+        flat: yes
+      run_once: true
+      with_items:
+        - "{{ ceph_keys.stdout_lines }}"
+
+
+- hosts: mgrs
+  gather_facts: false
+  become: True
+  roles:
+    - { role: ceph-defaults, tags: ['ceph_update_config'] }
+    - ceph-common
+    - { role: ceph-config, tags: ['ceph_update_config'], when: "ceph_release_num[ceph_release] >= ceph_release_num.luminous" }
+    - { role: ceph-mgr, when: "ceph_release_num[ceph_release] >= ceph_release_num.luminous" }
+
+- hosts: osds
+  gather_facts: false
+  become: True
+  roles:
+    - { role: ceph-defaults, tags: ['ceph_update_config'] }
+    - ceph-common
+    - { role: ceph-config, tags: ['ceph_update_config'] }
+    - ceph-osd

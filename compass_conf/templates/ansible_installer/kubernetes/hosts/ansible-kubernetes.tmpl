@@ -1,0 +1,31 @@
+#set ip_settings={}
+#for k,v in $getVar('ip_settings', {}).items()
+#set host_ip_settings={}
+#for intf in v
+#set $host_ip_settings[$intf["alias"]]=intf
+#end for
+#set $ip_settings[$k]=$host_ip_settings
+#end for
+
+# localhost
+127.0.0.1 localhost
+#set kube_masters = $getVar('kube_master', [])
+#set kube_nodes = $getVar('kube_node', [])
+#if not $isinstance($kube_masters, list)
+    #set kube_masters = [$kube_masters]
+#end if
+#if not $isinstance($kube_nodes, list)
+    #set kube_nodes = [$kube_nodes]
+#end if
+# kube_master
+#for worker in $kube_masters
+    #set worker_hostname = $worker.hostname
+    #set worker_ip = $ip_settings[$worker_hostname].mgmt.ip
+$worker_ip $worker_hostname
+#end for
+# kube_node
+#for worker in $kube_nodes
+    #set worker_hostname = $worker.hostname
+    #set worker_ip = $ip_settings[$worker_hostname].mgmt.ip
+$worker_ip $worker_hostname
+#end for

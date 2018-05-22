@@ -1,0 +1,368 @@
+# #############################################################################
+# Copyright (c) 2017 HUAWEI TECHNOLOGIES CO.,LTD and others.
+#
+# All rights reserved. This program and the accompanying materials
+# are made available under the terms of the Apache License, Version 2.0
+# which accompanies this distribution, and is available at
+# http://www.apache.org/licenses/LICENSE-2.0
+# #############################################################################
+---
+- name: remove osa log directory if exist
+  file:
+    path: /var/log/osa/
+    state: absent
+
+- name: create osa log directory
+  file:
+    path: /var/log/osa/
+    state: directory
+
+- name: remove osa user secrets if exist
+  shell: cp -rf /opt/openstack-ansible/etc/openstack_deploy/user_secrets.yml /etc/openstack_deploy/
+
+- name: generate the osa password
+  command: python pw-token-gen.py --file /etc/openstack_deploy/user_secrets.yml
+  args:
+    chdir: "/opt/openstack-ansible/scripts"
+
+- name: disable kernel update in rt_kvm scenario
+  lineinfile:
+    dest: /etc/ansible/roles/openstack_hosts/vars/ubuntu-16.04.yml
+    state: absent
+    regexp: 'linux-image-extra-*'
+  when: rt_kvm is defined and rt_kvm == "Enable"
+
+- name: copy openstack_user_config
+  template:
+    src: openstack_user_config.yml.j2
+    dest: /etc/openstack_deploy/openstack_user_config.yml
+
+- name: copy user_variables
+  template:
+    src: user_variables.yml.j2
+    dest: /etc/openstack_deploy/user_variables.yml
+
+- name: check apt source
+  shell: "ping -c 2 {{ LOCAL_REPOSITORY_IP }} > /dev/null"
+  register: checkresult
+  ignore_errors: "true"
+
+# yamllint disable rule:line-length
+- name: add mariadb local repository
+  blockinfile:
+    dest: /etc/openstack_deploy/user_variables.yml
+    block: |
+      galera_client_apt_repo_url: "http://192.168.137.222/mariadb"
+      galera_repo_url: "[ arch=amd64 ] http://192.168.137.222/mariadb"
+      uca_apt_repo_url: "[ arch=amd64 ] http://192.168.137.222/ubuntu-cloud"
+  when:
+    - checkresult.rc == 0
+    - offline_deployment is defined and offline_deployment == "Disable"
+    - hostvars[hostvars[inventory_hostname]['groups']['controller'][0]]['local_mirror'] == 'Ubuntu'
+
+- name: add libvirt into cinder packages
+  lineinfile:
+    dest: /etc/ansible/roles/os_cinder/vars/redhat-7.yml
+    insertafter: '^  - qemu-img-ev'
+    line: '  - libvirt'
+
+- name: fix the problem of nova cell_v2 discovery
+  blockinfile:
+    dest: /etc/ansible/roles/os_nova/tasks/nova_db_post_setup.yml
+    insertafter: 'nova-manage cell_v2 discover_hosts'
+    block: |
+      # add retry
+        register: cell_v2_discovery
+        until: cell_v2_discovery == 0
+        retries: 10
+        delay: 5
+        ignore_errors: true
+  when: hostvars[hostvars[inventory_hostname]['groups']['controller'][0]]['local_mirror'] == 'Ubuntu'
+
+- name: remove CentOS-Base.repo after ceph-osd
+  blockinfile:
+    dest: /etc/ansible/roles/ceph-osd/tasks/start_osds.yml
+    block: |
+      - name: remove empty yum base repo
+        shell: |
+          mv /etc/yum.repos.d/CentOS-Base.repo \
+             /etc/yum.repos.d/CentOS-Base.repo.bak;
+  when: hostvars[hostvars[inventory_hostname]['groups']['controller'][0]]['local_mirror'] == 'CentOS'
+
+- name: fix the problem in pip_install
+  blockinfile:
+    dest: /etc/ansible/roles/pip_install/tasks/pre_install_yum.yml
+    insertafter: 'pip_install_package_state'
+    block: |
+      # add retry
+        register: repo_result
+        until: repo_result | success
+        retries: 5
+        delay: 10
+  when: hostvars[hostvars[inventory_hostname]['groups']['controller'][0]]['local_mirror'] == 'CentOS'
+
+- name: copy chrony.conf
+  copy:
+    src: chrony.conf.j2
+    dest: /etc/ansible/roles/ansible-hardening/templates/
+
+- name: update the directory of chrony key
+  lineinfile:
+    dest: /etc/ansible/roles/ansible-hardening/templates/chrony.conf.j2
+    regexp: '^keyfile'
+    line: 'keyfile /etc/chrony.keys'
+  when: hostvars[hostvars[inventory_hostname]['groups']['controller'][0]]['local_mirror'] == 'CentOS'
+
+- name: add mariadb local repository
+  blockinfile:
+    dest: /etc/openstack_deploy/user_variables.yml
+    block: |
+      galera_client_apt_repo_url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/xenial-ocata-ppa xenial main"
+      galera_repo_url: "[ arch=amd64 ] http://{{ offline_repo_ip }}:{{ offline_repo_port }}/xenial-ocata-ppa xenial main"
+      uca_apt_repo_url: "[ arch=amd64 ] http://{{ offline_repo_ip }}:{{ offline_repo_port }}/xenial-ocata-ppa xenial main"
+      _rabbitmq_package_url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/rabbitmq-server_3.6.9-1_all.deb"
+      percona_package_url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/percona-xtrabackup-24_2.4.5-1.xenial_amd64.deb"
+      qpress_package_url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/qpress_11-1.xenial_amd64.deb"
+      haproxy_hatop_download_url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/hatop-0.7.7.tar.gz"
+      pip_upstream_url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/get-pip.py"
+      ceph_stable_repo: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/xenial-ocata-ppa"
+      ceph_pkg_source: "uca"
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: ignore galera client key
+  shell: |
+    sed -i '/galera-client-apt-keys/a\  when: offline_deployment is defined and offline_deployment == "Disable"' /etc/ansible/roles/galera_client/tasks/galera_client_install_apt.yml
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: ignore galera server key
+  shell: |
+    sed -i '/galera-apt-keys/a\  when: offline_deployment is defined and offline_deployment == "Disable"' /etc/ansible/roles/galera_server/tasks/galera_install_apt.yml
+  when: offline_deployment is defined and offline_deployment == "Enable"
+# yamllint enable rule:line-length
+
+- name: ignore git clone
+  lineinfile:
+    dest: /etc/ansible/roles/repo_build/tasks/repo_clone_git.yml
+    insertbefore: '^  async_status:'
+    line: '  ignore_errors: true'
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: add pbr to repo_pip_packages
+  lineinfile:
+    dest: /etc/ansible/roles/repo_build/defaults/main.yml
+    insertafter: '^  - cython'
+    line: '  - pbr'
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: ignore ceph special ppa
+  lineinfile:
+    dest: /etc/ansible/roles/ceph.ceph-common/tasks/installs/debian_ceph_repository.yml
+    insertafter: '^    - ppa:gluster/nfs-ganesha'
+    line: '  ignore_errors: true'
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: remove repo_build_pip_no_binary
+  lineinfile:
+    dest: /opt/openstack-ansible/group_vars/repo_all.yml
+    state: absent
+    regexp: "{{ item }}"
+  with_items: ['^repo_build_pip_no_binary:', '^  - libvirt-python']
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: copy venv script
+  copy:
+    src: "op-venv-script.sh"
+    dest: "/opt/op-venv-script.sh"
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: update venv script
+  blockinfile:
+    dest: /etc/ansible/roles/repo_build/tasks/repo_venv_build.yml
+    insertbefore: '^- name: Run venv process script'
+    block: |
+      - name: update venv script
+        copy:
+          src: "/opt/op-venv-script.sh"
+          dest: "/opt/op-venv-script.sh"
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: copy absolute requirement
+  copy:
+    src: "requirements_absolute_requirements.txt"
+    dest: "/opt/requirements_absolute_requirements.txt"
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: update absolute requirements
+  blockinfile:
+    dest: /etc/ansible/roles/repo_build/tasks/repo_post_build.yml
+    insertbefore: '^- name: Copy get-pip script into release folder'
+    block: |
+      {% raw %}
+      - name: update absolute requirements
+        copy:
+          src: "/opt/requirements_absolute_requirements.txt"
+          dest: "{{ repo_build_release_path }}/requirements_absolute_requirements.txt"
+      {% endraw %}
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+# This is a bug in ocata, will be removed in the future
+# - name: limit the version of networking-sfc in os_tacker
+#  shell: |
+#    sed -i 's/networking-sfc$/networking-sfc=={{ networking_sfc_version }}/g' \
+#        /etc/ansible/roles/os_tacker/defaults/main.yml
+
+- name: add rally and tempest to requirement.txt
+  blockinfile:
+    dest: /etc/ansible/roles/repo_build/tasks/repo_pre_build.yml
+    insertbefore: '^- include: repo_clone_git.yml'
+    block: |
+      {% raw %}
+      - name: add rally and tempest
+        blockinfile:
+          dest: "{{ repo_build_release_path }}/requirements.txt"
+          insertafter: '^wheel'
+          block: |
+            rally
+            tempest
+      {% endraw %}
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: add lxc image for offline deloyment
+  blockinfile:
+    dest: /etc/ansible/roles/lxc_hosts/tasks/main.yml
+    insertbefore: '^- include: lxc_post_install.yml'
+    block: |
+      - name: add lxc image to the lxc cache dir
+        get_url:
+          url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/download.tar.gz"
+          dest: "/opt/download.tar.gz"
+
+      - name: unarchive lxc image tarball
+        command: su -s /bin/sh -c "tar -zxf /opt/download.tar.gz -C /var/cache/lxc/"
+
+      - name: clear tarball
+        file:
+          path: "/opt/download.tar.gz"
+          state: absent
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: configure pip.conf for lxc hosts and repo lxc
+  template:
+    src: pip.conf.j2
+    dest: "/etc/ansible/roles/pip_install/templates/pip.conf.j2"
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: set set-upper-constraints downloading
+  blockinfile:
+    dest: /opt/openstack-ansible/playbooks/common-tasks/set-upper-constraints.yml
+    insertafter: '^# Use https'
+    block: |
+      - name: download upper-constraints.txt
+        get_url:
+          url: "http://{{ offline_repo_ip }}:{{ offline_repo_port }}/upper-constraints.txt"
+          dest: /opt/
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: modify set-upper-constraints
+  shell: |
+    sed -i 's#\(--constraint\).*$#\1 /opt/upper-constraints.txt#g' \
+      /opt/openstack-ansible/playbooks/common-tasks/set-upper-constraints.yml ;
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: copy apt.conf for lxc
+  copy:
+    src: apt.conf
+    dest: "/etc/ansible/roles/lxc_container_create/files/apt.conf"
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: add apt.conf for lxc
+  blockinfile:
+    dest: "/etc/ansible/roles/lxc_container_create/tasks/container_create.yml"
+    insertbefore: '^- name: Create hostname'
+    block: |
+      - name: add apt.conf
+        copy:
+          src: apt.conf
+          dest: "/etc/apt/apt.conf"
+
+  when: offline_deployment is defined and offline_deployment == "Enable"
+
+- name: copy cinder.yml
+  copy:
+    src: cinder.yml
+    dest: /etc/openstack_deploy/env.d/cinder.yml
+
+- name: copy ansible.cfg
+  template:
+    src: ansible.cfg
+    dest: /opt/openstack-ansible/playbooks/
+
+- name: copy user_ceph.yml
+  copy:
+    src: user_ceph.yml
+    dest: /etc/openstack_deploy/user_ceph.yml
+  when:
+    - hostvars[inventory_hostname]['groups']['ceph_mon'] is defined and
+      "{{ hostvars[inventory_hostname]['groups']['ceph_mon'] | length > 0 }}"
+    - hostvars[inventory_hostname]['groups']['ceph_osd'] is defined and
+      "{{ hostvars[inventory_hostname]['groups']['ceph_osd'] | length > 0 }}"
+
+- name: render ceph.yml.j2
+  template:
+    src: ceph.yml.j2
+    dest: /etc/openstack_deploy/conf.d/ceph.yml
+  when:
+    - hostvars[inventory_hostname]['groups']['ceph_mon'] is defined and
+      "{{ hostvars[inventory_hostname]['groups']['ceph_mon'] | length > 0 }}"
+    - hostvars[inventory_hostname]['groups']['ceph_osd'] is defined and
+      "{{ hostvars[inventory_hostname]['groups']['ceph_osd'] | length > 0 }}"
+
+- name: render user_variables_ceph.yml.j2
+  template:
+    src: user_variables_ceph.yml.j2
+    dest: /etc/openstack_deploy/user_variables_ceph.yml
+  when:
+    - hostvars[inventory_hostname]['groups']['ceph_mon'] is defined and
+      "{{ hostvars[inventory_hostname]['groups']['ceph_mon'] | length > 0 }}"
+    - hostvars[inventory_hostname]['groups']['ceph_osd'] is defined and
+      "{{ hostvars[inventory_hostname]['groups']['ceph_osd'] | length > 0 }}"
+
+- name: adapt no ha scenario
+  include: noha.yml
+  when:
+    - "{{ hostvars[inventory_hostname]['groups']['controller'] | length < 2 }}"
+
+- name: copy collect-log.sh to /opt
+  copy:
+    src: collect-log.sh
+    dest: /opt/collect-log.sh
+
+- name: copy collect-log.yml to /opt
+  copy:
+    src: collect-log.yml
+    dest: /opt/collect-log.yml
+
+# - name: change repore build
+#  lineinfile:
+#    dest: /etc/ansible/roles/repo_build/tasks/main.yml
+#    insertafter: "^- include: repo_post_build.yml"
+#    line: "- include: repo_fix_pandas.yml"
+
+- include: meters.yml
+
+# upstream has fix this issue so somments it
+# maybe will use in the furture
+- include: fix_pip_version.yml
+
+- include: fix_rescue.yml
+
+- name: include tacker in setup-openstack
+  lineinfile:
+    dest: /opt/openstack-ansible/playbooks/setup-openstack.yml
+    insertafter: "^- include: os-trove"
+    line: "- include: os-tacker-install.yml"
+
+- name: add variables file of tacker for centos
+  copy:
+    src: redhat-7.yml
+    dest: /etc/ansible/roles/os_tacker/vars/redhat-7.yml

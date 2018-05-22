@@ -1,0 +1,25 @@
+##############################################################################
+## Copyright (c) 2016 HUAWEI TECHNOLOGIES CO.,LTD and others.
+## All rights reserved. This program and the accompanying materials
+## are made available under the terms of the Apache License, Version 2.0
+## which accompanies this distribution, and is available at
+## http://www.apache.org/licenses/LICENSE-2.0
+##############################################################################
+---
+- name: restart network service
+  shell: "/sbin/ifconfig eth0 0 &&/sbin/ifdown -a && \
+          /sbin/ifup --ignore-errors -a"
+
+- name: Restart ceilometer services
+  service:
+    name: "{{ item.0.service_name }}"
+    enabled: "yes"
+    state: "restarted"
+  with_subelements:
+    - "{{ ceilometer_services }}"
+    - group
+  when: inventory_hostname in groups[item.1]
+  register: _restart
+  until: _restart | success
+  retries: 5
+  delay: 2

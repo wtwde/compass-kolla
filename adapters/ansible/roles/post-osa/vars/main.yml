@@ -1,0 +1,51 @@
+---
+
+# yamllint disable rule:line-length
+os_ver: "{{ lookup('yamlfile', '/opt/openstack-ansible/group_vars/all/all.yml key=openstack_release') }}"
+# yamllint enable rule:line-length
+os_name: pike
+
+# yamllint disable rule:line-length
+tacker_horizon_repo: https://github.com/openstack/tacker-horizon.git
+tacker_horizon_dir: /opt/tacker-horizon
+tacker_horizon_branch: "stable/{{ os_name }}"
+openstack_release: "{{ os_ver }}"
+tacker_horizon_venv: "/openstack/venvs/horizon-{{ openstack_release }}"
+tacker_horizon_enable_path: "{{ tacker_horizon_venv }}/lib/python2.7/site-packages/openstack_dashboard/enabled"
+# yamllint enable rule:line-length
+
+sfc_plugins:
+  src: sfc.conf
+  dst: /opt/sfc.conf
+
+intf_external: |-
+  {%- set intf_external = compu_sys_mappings["external"]["interface"] %}
+  {%- if compu_sys_mappings["external"]["vlan_tag"] | int %}
+  {%- set intf_external = intf_external + '.' + compu_sys_mappings["external"]["vlan_tag"]|string %}
+  {%- endif %}
+  {{- intf_external }}
+
+intf_tenant: |-
+  {%- set intf_tenant = compu_sys_mappings["tenant"]["interface"] %}
+  {%- if compu_sys_mappings["tenant"]["vlan_tag"] | int %}
+  {%- set intf_tenant = intf_tenant + '.' + compu_sys_mappings["tenant"]["vlan_tag"]|string %}
+  {%- endif %}
+  {{- intf_tenant }}
+
+intf_storage: |-
+  {%- set intf_storage = compu_sys_mappings["storage"]["interface"] %}
+  {%- if compu_sys_mappings["storage"]["vlan_tag"] | int %}
+  {%- set intf_storage = intf_storage + '.' + compu_sys_mappings["storage"]["vlan_tag"]|string %}
+  {%- endif %}
+  {{- intf_storage }}
+
+ceilometer_services:
+  ceilometer-agent-notification:
+    group:
+      - ceilometer_agent_notification
+    service_name: ceilometer-agent-notification
+  ceilometer-polling:
+    group:
+      - ceilometer_agent_central
+      - ceilometer_agent_compute
+    service_name: ceilometer-polling

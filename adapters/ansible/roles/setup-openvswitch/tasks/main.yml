@@ -1,0 +1,18 @@
+#############################################################################
+# Copyright (c) 2017 HUAWEI TECHNOLOGIES CO.,LTD and others.
+#
+# All rights reserved. This program and the accompanying materials
+# are made available under the terms of the Apache License, Version 2.0
+# which accompanies this distribution, and is available at
+# http://www.apache.org/licenses/LICENSE-2.0
+#############################################################################
+---
+- include: controller.yml
+  when:
+    - inventory_hostname not in groups['nova_compute']
+    - NEUTRON_MECHANISM_DRIVERS[0] == "openvswitch" or "opendaylight"
+
+- include: compute.yml
+  when:
+    - inventory_hostname in groups['nova_compute']
+    - NEUTRON_MECHANISM_DRIVERS[0] == "openvswitch" or "opendaylight"

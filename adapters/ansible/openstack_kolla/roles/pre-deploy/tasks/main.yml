@@ -1,0 +1,23 @@
+##############################################################################
+# Copyright (c) 2016 HUAWEI TECHNOLOGIES CO.,LTD and others.
+#
+# All rights reserved. This program and the accompanying materials
+# are made available under the terms of the Apache License, Version 2.0
+# which accompanies this distribution, and is available at
+# http://www.apache.org/licenses/LICENSE-2.0
+##############################################################################
+---
+- name: Generate passwords
+  shell: "kolla-genpwd"
+
+- name: bootstrap servers
+  shell: "kolla-ansible -i /opt/kolla-ansible/multinode bootstrap-servers \
+          | tee /var/log/kolla/bootstrap.log"
+
+- name: pull images
+  shell: "kolla-ansible pull -i /opt/kolla-ansible/multinode \
+          | tee /var/log/kolla/images_pull.log"
+
+- name: pre-checks
+  shell: "kolla-ansible prechecks -i /opt/kolla-ansible/multinode \
+           | tee /var/log/kolla/prechecks.log"

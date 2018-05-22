@@ -1,0 +1,12 @@
+[mons]
+host1 ansible_host=10.1.0.50 ansible_user=root
+host2 ansible_host=10.1.0.51 ansible_user=root
+host3 ansible_host=10.1.0.52 ansible_user=root
+
+[mgrs]
+host1
+host2
+host3
+[osds]
+host4 ansible_host=10.1.0.53 ansible_user=root
+host5 ansible_host=10.1.0.54 ansible_user=root

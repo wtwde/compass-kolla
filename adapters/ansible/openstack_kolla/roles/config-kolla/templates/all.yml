@@ -1,0 +1,42 @@
+ceph_origin: repository
+ceph_repository: community
+ceph_stable_release: luminous
+public_network: "10.1.0.0/24"
+cluster_network: "10.1.0.0/24"
+monitor_interface: eth0
+devices:
+  - '/dev/loop0'
+  - '/dev/loop1'
+osd_scenario: collocated
+journal_size: 100
+journal_collocation: true
+pool_default_pg_num: 32
+openstack_config: true # Ceph ansible automatically creates pools & keys
+openstack_glance_pool:
+  name: images
+  pg_num: "{{ osd_pool_default_pg_num }}"
+  rule_name: ""
+openstack_cinder_pool:
+  name: volumes
+  pg_num: "{{ osd_pool_default_pg_num }}"
+  rule_name: ""
+openstack_nova_pool:
+  name: vms
+  pg_num: "{{ osd_pool_default_pg_num }}"
+  rule_name: ""
+openstack_cinder_backup_pool:
+  name: backups
+  pg_num: "{{ osd_pool_default_pg_num }}"
+  rule_name: ""
+openstack_gnocchi_pool:
+  name: metrics
+  pg_num: "{{ osd_pool_default_pg_num }}"
+  rule_name: ""
+
+openstack_pools:
+  - "{{ openstack_glance_pool }}"
+  - "{{ openstack_cinder_pool }}"
+  - "{{ openstack_nova_pool }}"
+  - "{{ openstack_cinder_backup_pool }}"
+  - "{{ openstack_gnocchi_pool }}"
+

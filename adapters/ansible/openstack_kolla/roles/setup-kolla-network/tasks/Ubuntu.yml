@@ -1,0 +1,94 @@
+##############################################################################
+# Copyright (c) 2016 HUAWEI TECHNOLOGIES CO.,LTD and others.
+#
+# All rights reserved. This program and the accompanying materials
+# are made available under the terms of the Apache License, Version 2.0
+# which accompanies this distribution, and is available at
+# http://www.apache.org/licenses/LICENSE-2.0
+##############################################################################
+---
+- name: ensure script dir exist
+  shell: mkdir -p /opt/setup_networks
+
+- name: copy scripts
+  copy: src={{ item }} dest=/opt/setup_networks
+  with_items:
+    - setup_networks/log.py
+    - setup_networks/setup_networks.py
+    - setup_networks/check_network.py
+  tags:
+    - network_check
+
+- name: debug
+  debug:
+    msg: '{{ ip_settings[inventory_hostname] | to_json }}'
+
+- name: debug
+  debug:
+    msg: "{{ inventory_hostname}}"
+
+- name: copy config files
+  copy:
+    dest: /opt/setup_networks/network.cfg
+    content: |
+      bond_mappings: "{{ network_cfg['bond_mappings'] | to_json }}"
+      ip_settings: "{{ ip_settings[inventory_hostname] | to_json }}"
+      provider_net_mappings: "{{ network_cfg['provider_net_mappings'] | to_json }}"
+      sys_intf_mappings: "{{ contr_sys_mappings | to_json }}"
+
+
+- name: backup  network config file
+  shell: mv /etc/network/interfaces /etc/network/interfaces.bak
+  ignore_errors: True
+
+- name: config  network
+  template:
+    src: ubuntu_network.j2
+    dest: /etc/network/interfaces
+  notify:
+    - restart network service
+
+- meta: flush_handlers
+
+- name: check apt source
+  shell: "ping -c 2 {{ LOCAL_REPOSITORY_IP }} > /dev/null"
+  register: checkresult
+  ignore_errors: "true"
+
+- name: change sources list(apt)
+  template:
+    src: sources.list.lab
+    dest: /etc/apt/sources.list
+  when: checkresult.rc == 0
+
+- name: change sources list(apt)
+  template:
+    src: sources.list.official
+    dest: /etc/apt/sources.list
+  when: checkresult.rc != 0
+
+
+- name: make sure python lib exist
+  action: "{{ ansible_pkg_mgr }} name={{ item }} state=present"
+  with_items:
+    - python-yaml
+    - python-netaddr
+
+- name: check basic network connectivity
+  shell: >
+    python /opt/setup_networks/check_network.py \
+           "{{ inventory_hostname }}" \
+           "{{ ip_settings | to_json }}"
+  register: result
+  until: result.stderr.find('unreachable')==-1
+  retries: 3
+  delay: 2
+  tags:
+    - network_check
+
+- name: config  network
+  template:
+    src: ubuntu_network_post.j2
+    dest: /etc/network/interfaces
+  when:
+        - inventory_hostname == groups['controller']
