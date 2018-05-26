@@ -85,6 +85,7 @@ network_interface: "{{ contr_sys_mappings['mgmt']['interface'] }}"
 # configurations. It is recommended this interface not be configured with any IP
 # addresses for that reason.
 neutron_external_interface: "{{ contr_sys_mappings['external']['interface'] }}"
+tunnel_interface: "eth1.101" 
 
 # Valid options are [ openvswitch, linuxbridge, vmware_nsxv, vmware_dvs, opendaylight ]
 #neutron_plugin_agent: "openvswitch"
@@ -148,7 +149,7 @@ enable_cinder: "yes"
 #enable_etcd: "no"
 #enable_fluentd: "yes"
 #enable_freezer: "no"
-#enable_gnocchi: "no"
+enable_gnocchi: "yes"
 #enable_grafana: "no"
 #enable_haproxy: "yes"
 #enable_heat: "yes"
@@ -223,6 +224,35 @@ enable_cinder: "yes"
 #enable_watcher: "no"
 #enable_zun: "no"
 
+########################
+# neutron_service_plugins
+#########################
+service_plugins:
+  - name: "firewall"
+    enabled: "{{ enable_neutron_fwaas | bool and neutron_fwaas_version == 'v1' }}"
+  - name: "firewall_v2"
+    enabled: "{{ enable_neutron_fwaas | bool and neutron_fwaas_version == 'v2' }}"
+  - name: "flow_classifier"
+    enabled: "{{ enable_neutron_sfc | bool }}"
+  - name: "lbaasv2"
+    enabled: "{{ enable_neutron_lbaas | bool }}"
+  - name: "neutron_dynamic_routing.services.bgp.bgp_plugin.BgpPlugin"
+    enabled: "{{ enable_neutron_bgp_dragent | bool }}"
+  - name: "qos"
+    enabled: "{{ enable_neutron_qos | bool or enable_opendaylight_qos | bool}}"
+  - name: "router"
+    enabled: "{{ not enable_opendaylight_l3 | bool }}"
+  - name: "segments"
+    enabled: "{{ enable_neutron_segments | bool }}"
+  - name: "sfc"
+    enabled: "{{ enable_neutron_sfc | bool }}"
+  - name: "vpnaas"
+    enabled: "{{ enable_neutron_vpnaas | bool }}"
+  - name: "{{ opendaylight_l3_service_plugin }}"
+    enabled: "{{ enable_opendaylight_l3 | bool and enable_opendaylight | bool }}"
+  - name: "trunk"
+    enabled: true
+
 ##############
 # Ceph options
 ##############
@@ -294,7 +324,7 @@ glance_backend_ceph: "yes"
 # Gnocchi options
 #################
 # Valid options are [ file, ceph ]
-#gnocchi_backend_storage: "{{ 'ceph' if enable_ceph|bool else 'file' }}"
+gnocchi_backend_storage: "ceph"
 
 
 ################################

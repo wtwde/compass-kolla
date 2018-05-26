@@ -17,18 +17,23 @@
     path: /etc/ansible/roles/ceph-ansible/
     state: absent
 
+- name: clone ceph ansible
+  shell: "git clone https://github.com/ceph/ceph-ansible /etc/ansible/roles/ceph-ansible"
+
 - name: create kolla log directory
   file:
     path: /var/log/kolla/
     state: directory
 
-- name: clone ceph ansible
-  shell: "git clone https://github.com/ceph/ceph-ansible /etc/ansible/roles/ceph-ansible"
-
 - name: copy file
   copy:
     src: site.yml
     dest: /etc/ansible/roles/ceph-ansible/
+
+#- name: copy file
+#  copy:
+#    src: ansible.cfg
+#    dest: /etc/ansible/roles/ceph-ansible/
 
 - name: copy file
   copy:
@@ -37,15 +42,35 @@
 
 - name: copy file
   copy:
+    src: env.sh
+    dest: /etc/ansible/roles/ceph-ansible/env.sh
+
+- name: copy file
+  copy:
     src: ceph_host
     dest: /etc/ansible/hosts
 
+#- name: copy file
+#  copy:
+#    src: /etc/ansible/roles/ceph-ansible/plugins/actions
+#    dest: /opt/ansible_plugins/actions
+
 - name: deploy ceph
   #command: "pwd"
-  shell: "cd /etc/ansible/roles/ceph-ansible/; \
-                 /usr/bin/ansible-playbook site.yml \
-                 | tee /var/log/kolla/ceph.log"
+  shell: "/bin/bash /etc/ansible/roles/ceph-ansible/env.sh"
 
+#- name: deploy ceph
+#  #command: "pwd"
+#  shell: "/bin/bash /etc/ansible/roles/ceph-ansible/env.sh"
+
+#- name: deploy ceph
+#  #command: "pwd"
+#  shell: "cd /etc/ansible/roles/ceph-ansible/; \
+#           source /etc/ansible/roles/ceph-ansible/env.sh; \
+#           /usr/bin/ansible-playbook --version |tee /home/test.log; \
+#           /usr/bin/ansible-playbook site.yml -vvv \
+#           | tee /var/log/kolla/ceph.log1"
+#
 - name: rander kolla globals config
   template:
     src: globals.yml.j2
@@ -169,10 +194,40 @@
     dest: /etc/kolla/config/gnocchi/
     state: directory
 
+- name: create directory
+  file: 
+    dest: /etc/kolla/config/gnocchi-api/
+    state: directory
+
+- name: create directory
+  file: 
+    dest: /etc/kolla/config/gnocchi-statsd
+    state: directory
+
+- name: create directory
+  file: 
+    dest: /etc/kolla/config/gnocchi-metricd
+    state: directory
+
 - name: config gnocchi ceph
   copy:
     src: /tmp/kolla/ceph.conf
     dest: /etc/kolla/config/gnocchi/ceph.conf
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest: /etc/kolla/config/gnocchi-metricd/ceph.conf
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest: /etc/kolla/config/gnocchi-statsd/ceph.conf
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.conf
+    dest: /etc/kolla/config/gnocchi-api/ceph.conf
 
 - name: config gnocchi ceph
   copy:
@@ -184,6 +239,21 @@
   copy:
     src: /tmp/kolla/ceph.client.gnocchi.keyring
     dest: /etc/kolla/config/gnocchi/ceph.client.gnocchi.keyring
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.client.gnocchi.keyring
+    dest: /etc/kolla/config/gnocchi-metricd/ceph.client.gnocchi.keyring
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.client.gnocchi.keyring
+    dest: /etc/kolla/config/gnocchi-statsd/ceph.client.gnocchi.keyring
+
+- name: config gnocchi ceph
+  copy:
+    src: /tmp/kolla/ceph.client.gnocchi.keyring
+    dest: /etc/kolla/config/gnocchi-api/ceph.client.gnocchi.keyring
 
 - name: add code into openvswitch to restart network
   blockinfile:

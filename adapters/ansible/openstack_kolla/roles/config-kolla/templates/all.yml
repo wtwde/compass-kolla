@@ -11,6 +11,7 @@ osd_scenario: collocated
 journal_size: 100
 journal_collocation: true
 pool_default_pg_num: 32
+osd_pool_default_pg_num: 32
 openstack_config: true # Ceph ansible automatically creates pools & keys
 openstack_glance_pool:
   name: images

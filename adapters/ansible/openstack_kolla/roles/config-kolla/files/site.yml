@@ -36,21 +36,6 @@
     - ceph-common
     - { role: ceph-config, tags: ['ceph_update_config'] }
     - ceph-mon
-  post_tasks:
-    - name: find ceph keys
-      shell: cd /etc/ceph; ls -1 *.keyring *.conf
-      changed_when: false
-      register: ceph_keys
-      check_mode: no
-    
-    - name: copy keys to the ansible server
-      fetch:
-        src: "/etc/ceph/{{ item }}"
-        dest: "/tmp/kolla"
-        flat: yes
-      run_once: true
-      with_items:
-        - "{{ ceph_keys.stdout_lines }}"
 
 
 - hosts: mgrs
@@ -70,3 +55,33 @@
     - ceph-common
     - { role: ceph-config, tags: ['ceph_update_config'] }
     - ceph-osd
+
+
+- hosts: mons
+  gather_facts: false
+  become: True
+  tasks:
+    - name: find ceph keys
+      shell: cd /etc/ceph; ls -1 *.keyring *.conf
+      changed_when: false
+      register: ceph_keys
+      check_mode: no
+    
+    - name: rm key directory
+      file:
+        dest: /tmp/kolla
+        state: absent
+
+    - name: create key directory
+      file:
+        dest: /tmp/kolla/
+        state: directory
+
+    - name: copy keys to the ansible server
+      fetch:
+        src: "/etc/ceph/{{ item }}"
+        dest: "/tmp/kolla/{{ item }}"
+        flat: yes
+      run_once: true
+      with_items:
+        - "{{ ceph_keys.stdout_lines }}"

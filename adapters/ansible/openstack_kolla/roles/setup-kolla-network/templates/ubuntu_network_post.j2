@@ -21,3 +21,20 @@ iface br-ex inet static
     gateway {{ ip_settings[inventory_hostname]["external"]["gw"] }}
     nameserver 8.8.8.8
 
+
+{% set intf_tenant = compu_sys_mappings["tenant"]["interface"] %}
+{% if compu_sys_mappings["tenant"]["vlan_tag"] | int %}
+{% set intf_tenant = intf_tenant + '.' + compu_sys_mappings["tenant"]["vlan_tag"]|string %}
+{% endif %}
+auto {{ intf_tenant }}
+iface {{ intf_tenant }} inet manual
+{% if compu_sys_mappings["tenant"]["vlan_tag"] | int %}
+    vlan-raw-device {{ intf_tenant }}
+{% endif %}
+
+
+auto {{ intf_tenant }}
+iface {{ intf_tenant }} inet static
+    address {{ ip_settings[inventory_hostname]["tenant"]["ip"] }}
+    netmask 255.255.255.0
+

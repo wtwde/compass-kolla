@@ -91,4 +91,4 @@
     src: ubuntu_network_post.j2
     dest: /etc/network/interfaces
   when:
-        - inventory_hostname == groups['controller']
+        - inventory_hostname in groups['controller']
