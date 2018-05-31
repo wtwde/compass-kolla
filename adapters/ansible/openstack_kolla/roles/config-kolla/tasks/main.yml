@@ -255,9 +255,15 @@
     src: /tmp/kolla/ceph.client.gnocchi.keyring
     dest: /etc/kolla/config/gnocchi-api/ceph.client.gnocchi.keyring
 
+- name: copy kolla_site.yml
+  copy:
+    src: kolla_site.yml
+    dest: /usr/share/kolla-ansible/ansible/site.yml
+
 - name: add code into openvswitch to restart network
   blockinfile:
-    dest: /usr/share/kolla-ansible/ansible/roles/openvswitch/tasks/main.yml
+    dest: /usr/share/kolla-ansible/ansible/roles/openvswitch/tasks/deploy.yml
     block: |
      - name: restart network
-       shell: "ifconfig eth1 0 && ifdown -a && ifup -a"
+       shell: " docker stop keepalived || true && \
+                ifconfig eth1 0 && ifdown -a && ifup -a"
