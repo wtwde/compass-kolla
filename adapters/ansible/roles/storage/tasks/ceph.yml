@@ -47,12 +47,6 @@
   with_items: "{{ ceph_osd_images }}"
   when: ansible_os_family == 'Debian'
 
-#- name: Add a special partition label for kolla
-#  shell: "parted {{ item }}  -s -- mklabel gpt mkpart KOLLA_CEPH_OSD_BOOTSTRAP 1 -1"
-#  with_items: "{{ ceph_loopback.results | map(attribute='stdout') | list }}"
-#  when: ansible_os_family == 'Debian'
-
-# 5GB mkpart KOLLA_CEPH_OSD_BOOTSTRAP 5GB -1"
 - name: Create ceph partitions at boot time
   lineinfile:
     dest: "{{ rc_local }}"

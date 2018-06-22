@@ -9,68 +9,66 @@
 ---
 - name: remove kolla log directory if exist
   file:
-    path: /var/log/kolla/
+    path: "{{ item }}"
     state: absent
+  with_items:
+    - "{{ KOLLA_LOG }}"
+    - "{{ CEPH_DIRECTORY }}"
 
-- name: remove ceph ansible directory if exist
+- name: git clone ceph ansible
+  git: 
+    repo: "{{ CEPH_REPO }}"
+    dest: "{{ CEPH_DIRECTORY }}"
+    version: "{{ CEPH_VERSION }}"
+
+- name: create directories
   file:
-    path: /etc/ansible/roles/ceph-ansible/
-    state: absent
-
-- name: clone ceph ansible
-  shell: "git clone https://github.com/ceph/ceph-ansible /etc/ansible/roles/ceph-ansible"
-
-- name: create kolla log directory
-  file:
-    path: /var/log/kolla/
+    path: "{{ item }}"
     state: directory
+  with_items:
+    - "{{ KOLLA_LOG }}"
+    - "{{ GLANCE_CONF_DIR }}"
+    - "{{ CINDER_CONF_DIR }}"
+    - "{{ CINDER_VOLUME_DIR }}"
+    - "{{ CINDER_BACKUP_CONF_DIR }}"
+    - "{{ NOVA_CONF_DIR }}"
+    - "{{ GNOCCHI_CONF_DIR }}"
+    - "{{ GNOCCHI_API_CONF_DIR }}"
+    - "{{ GNOCCHI_METRICD_CONF_DIR }}"
+    - "{{ GNOCCHI_STATSD_CONF_DIR }}"
 
 - name: copy file
   copy:
-    src: site.yml
-    dest: /etc/ansible/roles/ceph-ansible/
-
-#- name: copy file
-#  copy:
-#    src: ansible.cfg
-#    dest: /etc/ansible/roles/ceph-ansible/
+    src: ceph_site.yml
+    dest: "{{ CEPH_DIRECTORY }}/site.yml"
 
 - name: copy file
   copy:
     src: all.yml
-    dest: /etc/ansible/roles/ceph-ansible/group_vars/
+    dest: "{{ CEPH_DIRECTORY }}/group_vars/"
+
+- name: set the ceph devices
+  lineinfile:
+    dest: "{{ CEPH_DIRECTORY }}/group_vars/all.yml"
+    line: "{{ item }}"
+  with_items:
+    - 'devices: {{ hostvars[ceph_host]["fact_for_ceph"] }}'
+    - 'public_network: "{{ mgmt_cidr }}"'
+    - 'cluster_network: "{{ storage_cidr }}"'
 
 - name: copy file
   copy:
-    src: env.sh
-    dest: /etc/ansible/roles/ceph-ansible/env.sh
+    src: "{{ CEPH_SETUP_SCRIPT }}"
+    dest: "{{ CEPH_DIRECTORY }}/{{ CEPH_SETUP_SCRIPT }}"
 
 - name: copy file
-  copy:
-    src: ceph_host
+  template:
+    src: ceph_hosts
     dest: /etc/ansible/hosts
 
-#- name: copy file
-#  copy:
-#    src: /etc/ansible/roles/ceph-ansible/plugins/actions
-#    dest: /opt/ansible_plugins/actions
-
 - name: deploy ceph
-  #command: "pwd"
-  shell: "/bin/bash /etc/ansible/roles/ceph-ansible/env.sh"
+  shell: "/bin/bash {{ CEPH_DIRECTORY }}/{{ CEPH_SETUP_SCRIPT }}"
 
-#- name: deploy ceph
-#  #command: "pwd"
-#  shell: "/bin/bash /etc/ansible/roles/ceph-ansible/env.sh"
-
-#- name: deploy ceph
-#  #command: "pwd"
-#  shell: "cd /etc/ansible/roles/ceph-ansible/; \
-#           source /etc/ansible/roles/ceph-ansible/env.sh; \
-#           /usr/bin/ansible-playbook --version |tee /home/test.log; \
-#           /usr/bin/ansible-playbook site.yml -vvv \
-#           | tee /var/log/kolla/ceph.log1"
-#
 - name: rander kolla globals config
   template:
     src: globals.yml.j2
@@ -91,169 +89,41 @@
   register: checkresult
   ignore_errors: "true"
 
-- name: add docker repo
-  lineinfile:
-    dest: /etc/kolla/globals.yml
-    regexp: "#docker_registry:"
-    line: "docker_registry: {{ LOCAL_DOCKER_REPOSITORY_IP }}"
-  when: checkresult.rc == 0
+#- name: add docker repo
+#  lineinfile:
+#    dest: /etc/kolla/globals.yml
+#    regexp: "#docker_registry:"
+#    line: "docker_registry: {{ LOCAL_DOCKER_REPOSITORY_IP }}"
+#  when: checkresult.rc == 0
 
-- name: create directory
-  file:
-    dest: /etc/kolla/config/glance/
-    state: directory
-
-- name: config glace ceph
+- name: copy ceph conf and key for components
   copy:
-    src: glance-api.conf
-    dest: /etc/kolla/config/glance/glance-api.conf 
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: glance-api.conf, dest: /etc/kolla/config/glance/glance-api.conf }
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/glance/ceph.conf }
+    - { src: /tmp/kolla/ceph.client.glance.keyring, dest: /etc/kolla/config/glance/ceph.client.glance.keyring }
+    - { src: cinder-volume.conf, dest: /etc/kolla/config/cinder/cinder-volume.conf }
+    - { src: cinder-backup.conf, dest: /etc/kolla/config/cinder/cinder-backup.conf }
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/cinder/ceph.conf}
+    - { src: /tmp/kolla/ceph.client.cinder.keyring, dest: /etc/kolla/config/cinder/cinder-backup/ceph.client.cinder.keyring}
+    - { src: /tmp/kolla/ceph.client.cinder-backup.keyring, dest: /etc/kolla/config/cinder/cinder-backup/ceph.client.cinder-backup.keyring}
+    - { src: /tmp/kolla/ceph.client.cinder.keyring, dest: /etc/kolla/config/cinder/cinder-volume/ceph.client.cinder.keyring}
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/nova/ceph.conf}
+    - { src: /tmp/kolla/ceph.client.cinder.keyring, dest: /etc/kolla/config/nova/ceph.client.cinder.keyring}
+    - { src: /tmp/kolla/ceph.client.nova.keyring, dest: /etc/kolla/config/nova/ceph.client.nova.keyring }
+    - { src: nova-compute.conf, dest: /etc/kolla/config/nova/nova-compute.conf }
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/gnocchi/ceph.conf}
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/gnocchi-api/ceph.conf}
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/gnocchi-metricd/ceph.conf }
+    - { src: /tmp/kolla/ceph.conf, dest: /etc/kolla/config/gnocchi-statsd/ceph.conf }
+    - { src: gnocchi.conf, dest: /etc/kolla/config/gnocchi/gnocchi.conf}
+    - { src: /tmp/kolla/ceph.client.gnocchi.keyring, dest: /etc/kolla/config/gnocchi/ceph.client.gnocchi.keyring}
+    - { src: /tmp/kolla/ceph.client.gnocchi.keyring, dest: /etc/kolla/config/gnocchi-api/ceph.client.gnocchi.keyring }
+    - { src: /tmp/kolla/ceph.client.gnocchi.keyring, dest: /etc/kolla/config/gnocchi-metricd/ceph.client.gnocchi.keyring }
+    - { src: /tmp/kolla/ceph.client.gnocchi.keyring, dest: /etc/kolla/config/gnocchi-statsd/ceph.client.gnocchi.keyring }
 
-- name: config glace ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest: /etc/kolla/config/glance/ceph.conf
-
-- name: config glace ceph
-  copy:
-    src: /tmp/kolla/ceph.client.glance.keyring
-    dest: /etc/kolla/config/glance/ceph.client.glance.keyring
-
-- name: create directory
-  file:
-    dest: /etc/kolla/config/cinder/
-    state: directory
-
-- name: config glace ceph
-  copy:
-    src: cinder-volume.conf
-    dest: /etc/kolla/config/cinder/cinder-volume.conf
-
-- name: config glace ceph
-  copy:
-    src: cinder-backup.conf
-    dest: /etc/kolla/config/cinder/cinder-backup.conf
-
-- name: config glace ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest: /etc/kolla/config/cinder/ceph.conf
-
-- name: create directory
-  file:
-    dest: /etc/kolla/config/cinder/cinder-backup
-    state: directory
-
-- name: create directory
-  file:
-    dest: /etc/kolla/config/cinder/cinder-volume
-    state: directory
-
-- name: config cinder ceph
-  copy:
-    src: /tmp/kolla/ceph.client.cinder.keyring
-    dest: /etc/kolla/config/cinder/cinder-backup/ceph.client.cinder.keyring
-
-
-- name: config cinder ceph
-  copy:
-    src: /tmp/kolla/ceph.client.cinder-backup.keyring
-    dest: /etc/kolla/config/cinder/cinder-backup/ceph.client.cinder-backup.keyring
-
-- name: config cinder ceph
-  copy:
-    src: /tmp/kolla/ceph.client.cinder.keyring
-    dest: /etc/kolla/config/cinder/cinder-volume/ceph.client.cinder.keyring
-
-- name: create directory
-  file:
-    dest: /etc/kolla/config/nova/
-    state: directory
-
-- name: config nova ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest:  /etc/kolla/config/nova/ceph.conf
-
-- name: config nova ceph
-  copy:
-    src: /tmp/kolla/ceph.client.cinder.keyring
-    dest: /etc/kolla/config/nova/ceph.client.cinder.keyring
-
-- name: config nova ceph
-  copy:
-    src: /tmp/kolla/ceph.client.nova.keyring
-    dest: /etc/kolla/config/nova/ceph.client.nova.keyring
-
-- name: config nova ceph
-  copy:
-    src: nova-compute.conf
-    dest: /etc/kolla/config/nova/nova-compute.conf
-
-- name: create directory
-  file: 
-    dest: /etc/kolla/config/gnocchi/
-    state: directory
-
-- name: create directory
-  file: 
-    dest: /etc/kolla/config/gnocchi-api/
-    state: directory
-
-- name: create directory
-  file: 
-    dest: /etc/kolla/config/gnocchi-statsd
-    state: directory
-
-- name: create directory
-  file: 
-    dest: /etc/kolla/config/gnocchi-metricd
-    state: directory
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest: /etc/kolla/config/gnocchi/ceph.conf
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest: /etc/kolla/config/gnocchi-metricd/ceph.conf
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest: /etc/kolla/config/gnocchi-statsd/ceph.conf
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.conf
-    dest: /etc/kolla/config/gnocchi-api/ceph.conf
-
-- name: config gnocchi ceph
-  copy:
-    src: gnocchi.conf
-    dest: /etc/kolla/config/gnocchi/gnocchi.conf
-
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.client.gnocchi.keyring
-    dest: /etc/kolla/config/gnocchi/ceph.client.gnocchi.keyring
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.client.gnocchi.keyring
-    dest: /etc/kolla/config/gnocchi-metricd/ceph.client.gnocchi.keyring
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.client.gnocchi.keyring
-    dest: /etc/kolla/config/gnocchi-statsd/ceph.client.gnocchi.keyring
-
-- name: config gnocchi ceph
-  copy:
-    src: /tmp/kolla/ceph.client.gnocchi.keyring
-    dest: /etc/kolla/config/gnocchi-api/ceph.client.gnocchi.keyring
 
 - name: copy kolla_site.yml
   copy:
@@ -266,4 +136,4 @@
     block: |
      - name: restart network
        shell: " docker stop keepalived || true && \
-                ifconfig eth1 0 && ifdown -a && ifup -a"
+                ifconfig eth1 0 && ifdown -a && ifup -a ||true"

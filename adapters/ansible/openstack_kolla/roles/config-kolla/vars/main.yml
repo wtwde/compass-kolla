@@ -7,5 +7,20 @@
 # http://www.apache.org/licenses/LICENSE-2.0
 # #############################################################################
 ---
+KOLLA_LOG: /var/log/kolla
+ceph_host: "{{ hostvars[inventory_hostname]['groups']['ceph_osd'][0] }}"
 LOCAL_REPOSITORY_IP: "192.168.137.222"
 LOCAL_DOCKER_REPOSITORY_IP: "192.168.137.100"
+CEPH_DIRECTORY: /etc/ansible/roles/ceph-ansible
+CEPH_REPO: "https://github.com/ceph/ceph-ansible"
+CEPH_VERSION: "c68126d6fdde8efbeb6e5c495a0147a34a5dfd0e"
+CEPH_SETUP_SCRIPT: "ceph_setup.sh"
+GLANCE_CONF_DIR: /etc/kolla/config/glance
+CINDER_CONF_DIR: /etc/kolla/config/cinder
+CINDER_VOLUME_DIR: /etc/kolla/config/cinder/cinder-volume
+CINDER_BACKUP_CONF_DIR: /etc/kolla/config/cinder/cinder-backup
+NOVA_CONF_DIR: /etc/kolla/config/nova
+GNOCCHI_CONF_DIR: /etc/kolla/config/gnocchi
+GNOCCHI_API_CONF_DIR: /etc/kolla/config/gnocchi-api
+GNOCCHI_METRICD_CONF_DIR: /etc/kolla/config/gnocchi-metricd
+GNOCCHI_STATSD_CONF_DIR: /etc/kolla/config/gnocchi-statsd

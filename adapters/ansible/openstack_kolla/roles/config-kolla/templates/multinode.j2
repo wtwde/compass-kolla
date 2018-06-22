@@ -2,9 +2,10 @@
 # additional groups are for more control of the environment.
 [control]
 # These hostname must be resolvable from your deployment host
-host1 ansible_host=10.1.0.50 ansible_user=root
-host2 ansible_host=10.1.0.51 ansible_user=root
-host3 ansible_host=10.1.0.52 ansible_user=root
+{% for host in groups.controller%}
+{{host}}  ansible_host={{ hostvars[host]['ansible_ssh_host'] }} ansible_user=root
+{% endfor %}
+
 
 # The above can also be specified as follows:
 #control[01:03]     ansible_user=kolla
@@ -12,9 +13,9 @@ host3 ansible_host=10.1.0.52 ansible_user=root
 # The network nodes are where your l3-agent and loadbalancers will run
 # This can be the same as a host in the control group
 [network]
-host1
-host2
-host3
+{% for host in groups.controller%}
+{{host}}
+{% endfor %}
 
 # inner-compute is the groups of compute nodes which do not have
 # external reachability
@@ -23,17 +24,18 @@ host3
 # external-compute is the groups of compute nodes which can reach
 # outside
 [external-compute]
-host4 ansible_host=10.1.0.53 ansible_user=root
-host5 ansible_host=10.1.0.54 ansible_user=root
+{% for host in groups.compute%}
+{{host}}  ansible_host={{ hostvars[host]['ansible_ssh_host'] }} ansible_user=root
+{% endfor %}
 
 [compute:children]
 inner-compute
 external-compute
 
 [monitoring]
-host1
-host2
-host3
+{% for host in groups.controller%}
+{{host}}
+{% endfor %}
 
 # When compute nodes and control nodes use different interfaces,
 # you need to comment out "api_interface" and other interfaces from the globals.yml
@@ -41,11 +43,9 @@ host3
 #compute01 neutron_external_interface=eth0 api_interface=em1 storage_interface=em1 tunnel_interface=em1
 
 [storage]
-#3dhost1
-#host2
-#host3
-host4
-host5
+{% for host in groups.ceph_osd%}
+{{host}}
+{% endfor %}
 
 [deployment]
 localhost       ansible_connection=local

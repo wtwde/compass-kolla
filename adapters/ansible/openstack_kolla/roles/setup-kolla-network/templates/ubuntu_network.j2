@@ -37,3 +37,19 @@ iface {{ intf_tenant }} inet static
     address {{ ip_settings[inventory_hostname]["tenant"]["ip"] }}
     netmask 255.255.255.0
 
+{% set intf_storage = compu_sys_mappings["storage"]["interface"] %}
+{% if compu_sys_mappings["storage"]["vlan_tag"] | int %}
+{% set intf_storage = intf_storage + '.' + compu_sys_mappings["storage"]["vlan_tag"]|string %}
+{% endif %}
+auto {{ intf_storage }}
+iface {{ intf_storage }} inet manual
+{% if compu_sys_mappings["storage"]["vlan_tag"] | int %}
+    vlan-raw-device {{ intf_storage }}
+{% endif %}
+
+
+auto {{ intf_storage }}
+iface {{ intf_storage }} inet static
+    address {{ ip_settings[inventory_hostname]["storage"]["ip"] }}
+    netmask 255.255.255.0
+
